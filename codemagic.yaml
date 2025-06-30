@@ -1,0 +1,15 @@
+workflows:
+  trip_logger_release:
+    name: Trip Logger iOS Release
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Get dependencies
+        script: flutter pub get
+      - name: Build iOS IPA
+        script: |
+          flutter build ipa --release --export-options-plist=ExportOptions.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
