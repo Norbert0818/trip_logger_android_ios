@@ -1,0 +1,27 @@
+workflows:
+  trip_logger_release:
+    name: Trip Logger iOS Release
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      vars:
+        BUNDLE_ID: "com.yourcompany.triplogger"
+        APP_NAME: "Roova"
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "main"
+          include: true
+    scripts:
+      - name: Get dependencies
+        script: flutter pub get
+      - name: Enable iOS signing
+        script: |
+          echo "Setting up signing"
+      - name: Build iOS IPA
+        script: |
+          flutter build ipa --release --export-options-plist=ExportOptions.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
