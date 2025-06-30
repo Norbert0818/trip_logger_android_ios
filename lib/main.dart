@@ -1,24 +1,25 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
-import 'package:intl/intl.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:path/path.dart' as p;
-import 'background_task.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
-import 'package:device_info_plus/device_info_plus.dart';
+import 'package:excel/excel.dart';
+import 'package:path_provider/path_provider.dart';
+import 'background_task.dart';
 
 
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load();
   runApp(
     const MaterialApp(
@@ -46,13 +47,15 @@ class _TripLoggerPageState extends State<TripLoggerPage> {
   @override
   void initState() {
     super.initState();
-    _initForegroundTask();
+    if (Platform.isAndroid) _initForegroundTask();
     _checkLocationPermission();
     _loadLastUsedFile();
     _requestPermission();
   }
 
+
   void _initForegroundTask() {
+    if (!Platform.isAndroid) return;
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
         channelId: 'trip_logger_channel_id',
@@ -63,7 +66,7 @@ class _TripLoggerPageState extends State<TripLoggerPage> {
       ),
       iosNotificationOptions: IOSNotificationOptions(),
       foregroundTaskOptions: ForegroundTaskOptions(
-        eventAction: ForegroundTaskEventAction.repeat(10000), // kötelező, itt adod meg az időközt is
+        eventAction: ForegroundTaskEventAction.repeat(10000),
         autoRunOnBoot: false,
         allowWakeLock: true,
         allowWifiLock: true,
@@ -71,13 +74,14 @@ class _TripLoggerPageState extends State<TripLoggerPage> {
     );
   }
 
+
   Future<void> _requestPermission() async {
     await Geolocator.requestPermission();
-    await Permission.storage.request();
-    await Permission.manageExternalStorage.request();
+    if (Platform.isAndroid) {
+      await Permission.storage.request();
+      await Permission.manageExternalStorage.request();
+    }
   }
-
-
 
   @pragma('vm:entry-point')
   void startCallback() {
@@ -111,14 +115,23 @@ class _TripLoggerPageState extends State<TripLoggerPage> {
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx']);
     if (result != null) {
       final original = File(result.files.single.path!);
-      final name = result.files.single.name;
-      final target = File('/storage/emulated/0/Download/$name');
-      final copied = await original.copy(target.path);
+      File copied;
+      if (Platform.isAndroid) {
+        final name = result.files.single.name;
+        final target = File('/storage/emulated/0/Download/$name');
+        copied = await original.copy(target.path);
+      } else {
+        final appDir = await getApplicationDocumentsDirectory();
+        final name = result.files.single.name;
+        copied = await original.copy('${appDir.path}/$name');
+      }
       setState(() => selectedExcelFile = copied);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('last_excel_path', copied.path);
     }
   }
+
+
   Future<bool> _checkLocationPermission() async {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
